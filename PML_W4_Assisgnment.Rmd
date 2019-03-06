@@ -1,0 +1,102 @@
+---
+title: "Practical Machine Learning - Peer-Reviewed Assgnment"
+author: "Elena Yusupova"
+date: "March 3, 2019"
+output:
+  html_document:
+    df_print: paged
+---
+
+### Introduction
+    
+The goal of this project is to use data from accelerometers on the belt, forearm, arm, and dumbell of participants asked to perform barbell lifts correctly and incorrectly in 5 different ways and predict the manner in which they did the exercise. 
+
+### Data 
+
+The data from this project were provided - separately for training and testing set. 
+
+```{r dataimport}
+#Set working directory
+library(caret)
+library(e1071)
+library(randomForest)
+library(foreach)
+library(import)
+library(doParallel)
+
+#Download the training data
+MDsurvey1 <- download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", "pml_training.csv")
+training <- read.csv("pml_training.csv", header = T)
+
+#Download the testing data
+MDsurvey2 <- download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", "pml_testing.csv")
+testing <- read.csv("pml_testing.csv", header = T)
+```
+   
+### Dataset Preparation
+
+Before we can run ML algorithm we need to clean the data and remove the variables that have have missing values and several time and ID variables that are not relevant for the estimation.   
+
+```{r datasetprep}
+cleanData <- function(x) {
+  x <- x[, colSums(is.na(x))==0 & colSums(x=="")==0]
+  # Remove other columns not relevant
+  x <- x[, -c(1:7)] 
+  
+  return(x)
+}
+
+# Remove variables that with empty cells and NAs
+training <- cleanData(training)
+testing <- cleanData(testing)
+
+```
+This also quite significantly reduced the number of variables in training set
+
+### Random forest
+
+We selected random forest as it is generally considered (together with GBM method) one of the best predictive methods. Also the outcome variable _Classe_ consists of 5 categories. Random forests (and decision tree approach) in general are very suitable for this types of prediction tasks. 
+The first step was division of the sample to training (70%) and validation set (30%). On the training set we ran random forest and used the model. We used the validation part of dataset to see how well it performs on out of sample ate 
+
+```{r randomforest}
+#Now we split the preprocessed training data into training set and validation set.
+set.seed(123456)
+inTrain <- createDataPartition(y=training$classe, p=0.7, list=FALSE)
+trainingFINAL <- training[inTrain,]
+validationFINAL <- training[-inTrain,]
+
+# Measure to speed up frequency of updates - Create local cluster with 10 workers
+#cl <- makePSOCKcluster(10)
+# Announce it to software
+#registerDoParallel(cl)
+
+#Random forest
+fitRF <- train(classe ~ ., method = "rf", data = trainingFINAL) 
+
+                 
+fitRF_valid <- predict(fitRF, validationFINAL)
+confusionMatrix(fitRF_valid, validationFINAL$classe)
+
+```
+
+The confusion matrix shows that the model performs very well on out of sample data. It classified correctly all observations in the validation set. 
+
+### Use of model for prediction
+
+Given very stronger performance of the model we use it for the model prediction. 
+
+
+```{r prediction}
+outOfSamplePrediction <- predict(fitRF, testing)
+print(outOfSamplePrediction)
+write.csv(outOfSamplePrediction, file="test_prediction.csv")
+```
+
+
+
+
+
+
+
+
+

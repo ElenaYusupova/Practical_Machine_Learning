@@ -5,6 +5,7 @@ date: "March 3, 2019"
 output:
   html_document:
     df_print: paged
+  pdf_document: default
 ---
 
 ### Introduction
@@ -23,6 +24,7 @@ library(randomForest)
 library(foreach)
 library(import)
 library(doParallel)
+library(rfUtilities)
 
 #Download the training data
 MDsurvey1 <- download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", "pml_training.csv")
@@ -49,14 +51,13 @@ cleanData <- function(x) {
 # Remove variables that with empty cells and NAs
 training <- cleanData(training)
 testing <- cleanData(testing)
-
 ```
 This also quite significantly reduced the number of variables in training set
 
-### Random forest
+### Random forest and Cross-Validation
 
 We selected random forest as it is generally considered (together with GBM method) one of the best predictive methods. Also the outcome variable _Classe_ consists of 5 categories. Random forests (and decision tree approach) in general are very suitable for this types of prediction tasks. 
-The first step was division of the sample to training (70%) and validation set (30%). On the training set we ran random forest and used the model. We used the validation part of dataset to see how well it performs on out of sample ate 
+The first step was division of the sample to training (70%) and the validation set (30%). On the training set we ran random forest - the model performd well. 
 
 ```{r randomforest}
 #Now we split the preprocessed training data into training set and validation set.
@@ -70,21 +71,34 @@ validationFINAL <- training[-inTrain,]
 # Announce it to software
 #registerDoParallel(cl)
 
-#Random forest
-fitRF <- train(classe ~ ., method = "rf", data = trainingFINAL) 
+# Paramters for cross validation
+train_Control <- trainControl(method = "cv", number = 10, p = 0.75)
 
-                 
+#Random forest
+fitRF <- train(classe ~ ., method = "rf", data = trainingFINAL, trControl=train_Control) 
+
 fitRF_valid <- predict(fitRF, validationFINAL)
 confusionMatrix(fitRF_valid, validationFINAL$classe)
 
 ```
 
-The confusion matrix shows that the model performs very well on out of sample data. It classified correctly all observations in the validation set. 
+## k-Fold Cross Validation
+The k-fold cross validation method involves splitting the dataset into k-subsets. Each subset is held out while the model is trained on all other subsets. This process is completed until accuracy is determined for each instance in the dataset, and an overall accuracy estimate is provided.
+I used cv method in TrainControl witn k=10-fold cross validation. The results show high accuracy 98% and more for each subset.   
 
-### Use of model for prediction
+## Model Validation and Out-of-Sample Error  
 
-Given very stronger performance of the model we use it for the model prediction. 
+```{r validation}
+fitRF_valid <- predict(fitRF, validationFINAL)
+confusionMatrix(fitRF_valid, validationFINAL$classe)
+```
 
+The confusion matrix shows that the model performs very well on out of sample data. It classified 99.37% of observations in the validation set correctly, i.r. only stounf 0.6% of observations in the validation step are not classified correctly 
+The used prediction diagnostics (including those for individual classes show very good results. Therefore I consider this model good for the next step - predicting on the test set with unknown classifications.  
+
+### Use of RF Model for Prediction Of 20 Observations in the Test File
+
+Given very stronger performance of the model we use it for the test dample predictions. 
 
 ```{r prediction}
 outOfSamplePrediction <- predict(fitRF, testing)
